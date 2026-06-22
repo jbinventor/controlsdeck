@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-i18n="renderer.documentTitle"></title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div>
+          <p class="eyebrow" data-i18n="renderer.sidebar.eyebrow"></p>
+          <h1 data-i18n="renderer.sidebar.title"></h1>
+        </div>
+        <button id="add-page-button" class="ghost-button" data-i18n="renderer.sidebar.addPage"></button>
+      </div>
+      <div id="pages-list" class="pages-list"></div>
+      <div class="sidebar-footer">
+        <p id="remote-url" class="remote-url-text" data-i18n="renderer.sidebar.remoteLoading"></p>
+        <div id="remote-qr" class="remote-qr hidden" aria-live="polite">
+          <img id="remote-qr-image" data-i18n-aria-label="renderer.sidebar.remoteQrCaption" alt="">
+          <p class="remote-qr-caption" data-i18n="renderer.sidebar.remoteQrCaption"></p>
+        </div>
+        <div class="sidebar-actions">
+          <button id="export-config-button" class="ghost-button sidebar-action-button" data-i18n="renderer.sidebar.exportConfig"></button>
+          <button id="import-config-button" class="ghost-button sidebar-action-button" data-i18n="renderer.sidebar.importConfig"></button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <section id="page-grid" class="page-grid"></section>
+    </main>
+  </div>
+
+  <div id="page-modal" class="modal hidden">
+    <div class="modal-card narrow">
+      <div class="modal-header">
+        <h3 data-i18n="renderer.modals.pageTitle"></h3>
+        <button data-close="page-modal" class="icon-button" data-i18n-aria-label="renderer.aria.closeModal"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form id="page-form" class="form-grid">
+        <label>
+          <span data-i18n="renderer.fields.name"></span>
+          <input id="page-name-input" name="name" type="text" required>
+        </label>
+        <label>
+          <span data-i18n="renderer.fields.columns"></span>
+          <input id="page-columns-input" name="columns" type="number" min="1" max="12" required>
+        </label>
+        <label>
+          <span data-i18n="renderer.fields.rows"></span>
+          <input id="page-rows-input" name="rows" type="number" min="1" max="8" required>
+        </label>
+        <label class="color-field">
+          <span data-i18n="renderer.fields.backgroundColor"></span>
+          <input id="page-background-color-input" name="backgroundColor" type="hidden" required>
+          <button type="button" id="page-background-color-trigger" class="color-trigger" data-i18n-aria-label="renderer.aria.selectBackgroundColor"></button>
+        </label>
+        <div class="form-actions full-width">
+          <button type="button" data-close="page-modal" class="ghost-button" data-i18n="renderer.buttons.cancel"></button>
+          <button type="submit" class="primary-button" data-i18n="renderer.buttons.save"></button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="control-modal" class="modal hidden">
+    <div class="modal-card wide">
+      <div class="modal-header">
+        <h3 data-i18n="renderer.modals.controlTitle"></h3>
+        <button data-close="control-modal" class="icon-button" data-i18n-aria-label="renderer.aria.closeModal"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form id="control-form" class="control-layout">
+        <section class="form-section">
+          <h4 data-i18n="renderer.sections.controlType"></h4>
+          <label>
+            <span data-i18n="renderer.fields.plugin"></span>
+            <select id="plugin-select" name="pluginId" required></select>
+          </label>
+          <label>
+            <span data-i18n="renderer.fields.control"></span>
+            <select id="control-type-select" name="controlTypeId" required></select>
+          </label>
+          <label>
+            <span data-i18n="renderer.fields.columnSpan"></span>
+            <input name="columnSpan" type="number" min="1" value="1" required>
+          </label>
+          <label>
+            <span data-i18n="renderer.fields.rowSpan"></span>
+            <input name="rowSpan" type="number" min="1" value="1" required>
+          </label>
+        </section>
+        <section class="form-section">
+          <h4 data-i18n="renderer.sections.visual"></h4>
+          <div id="common-fields" class="dynamic-fields"></div>
+        </section>
+        <section class="form-section">
+          <h4 data-i18n="renderer.sections.pluginOptions"></h4>
+          <div id="plugin-fields" class="dynamic-fields"></div>
+        </section>
+        <div class="form-actions full-width">
+          <button type="button" id="delete-control-button" class="danger-button hidden" data-i18n="renderer.buttons.delete"></button>
+          <button type="button" data-close="control-modal" class="ghost-button" data-i18n="renderer.buttons.cancel"></button>
+          <button type="submit" class="primary-button" data-i18n="renderer.buttons.saveControl"></button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="icon-picker-modal" class="modal hidden">
+    <div class="modal-card icon-picker-card">
+      <div class="modal-header">
+        <h3 data-i18n="renderer.modals.iconPickerTitle"></h3>
+        <button type="button" data-close="icon-picker-modal" class="icon-button" data-i18n-aria-label="renderer.aria.closeModal"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="icon-picker-toolbar">
+        <input id="icon-search-input" type="text" data-i18n-placeholder="renderer.iconPicker.searchPlaceholder" autocomplete="off">
+      </div>
+      <div id="icon-results" class="icon-results-grid"></div>
+      <p id="icon-empty-state" class="field-hint hidden" data-i18n="renderer.iconPicker.empty"></p>
+    </div>
+  </div>
+
+  <div id="color-picker-modal" class="modal hidden">
+    <div class="modal-card color-picker-card">
+      <div class="modal-header">
+        <h3 data-i18n="renderer.modals.colorPickerTitle"></h3>
+        <button type="button" data-close="color-picker-modal" class="icon-button" data-i18n-aria-label="renderer.aria.closeModal"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="color-picker-toolbar">
+        <div class="color-mode-switch" role="group" data-i18n-aria-label="renderer.colorPicker.groupAria">
+          <button type="button" id="color-mode-basic" class="ghost-button active" data-i18n="renderer.buttons.basic"></button>
+          <button type="button" id="color-mode-advanced" class="ghost-button" data-i18n="renderer.buttons.advanced"></button>
+        </div>
+      </div>
+      <div id="color-basic-panel" class="color-mode-panel">
+        <div id="color-basic-palette" class="color-palette-grid"></div>
+      </div>
+      <div id="color-advanced-panel" class="color-mode-panel hidden">
+        <input id="color-advanced-input" type="color" data-i18n-aria-label="renderer.colorPicker.advancedAria">
+      </div>
+    </div>
+  </div>
+
+  <div id="image-picker-modal" class="modal hidden">
+    <div class="modal-card image-picker-card">
+      <div class="modal-header">
+        <h3 data-i18n="renderer.modals.imagePickerTitle"></h3>
+        <button type="button" data-close="image-picker-modal" class="icon-button" data-i18n-aria-label="renderer.aria.closeModal"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <p class="field-hint" data-i18n="renderer.imagePicker.hint"></p>
+      <div class="image-picker-preview-wrap">
+        <button type="button" id="image-preview-button" class="image-preview-button" data-i18n-aria-label="renderer.aria.selectImage">
+          <img id="image-preview-image" class="hidden" alt="">
+          <span id="image-preview-empty" data-i18n="renderer.imagePicker.empty"></span>
+        </button>
+        <button type="button" id="image-remove-button" class="icon-button image-remove-button hidden" data-i18n-aria-label="renderer.aria.removeImage">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </div>
+      <input id="image-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" class="hidden">
+    </div>
+  </div>
+
+  <script src="./icon-catalog.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

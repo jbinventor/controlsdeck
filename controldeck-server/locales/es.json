@@ -1,0 +1,181 @@
+{
+  "main": {
+    "defaults": {
+      "pageName": "Pagina principal",
+      "pageNameIndexed": "Pagina {{index}}"
+    },
+    "dialogs": {
+      "exportTitle": "Exportar configuracion de ControlsDeck",
+      "importTitle": "Importar configuracion de ControlsDeck"
+    },
+    "errors": {
+      "pageNotFound": "Pagina no encontrada",
+      "invalidImportedConfig": "El archivo seleccionado no contiene una configuracion valida."
+    }
+  },
+  "renderer": {
+    "documentTitle": "ControlsDeck",
+    "sidebar": {
+      "eyebrow": "ControlsDeck",
+      "title": "Editor",
+      "addPage": "+ Nueva",
+      "remoteLoading": "Cliente remoto: cargando...",
+      "remoteLabel": "Cliente remoto: {{url}}",
+      "remoteQrAlt": "QR de cliente remoto para {{url}}",
+      "remoteQrCaption": "Escanea para abrir en movil",
+      "exportConfig": "Exportar",
+      "importConfig": "Importar"
+    },
+    "modals": {
+      "pageTitle": "Configurar pagina",
+      "controlTitle": "Configurar control",
+      "iconPickerTitle": "Seleccionar icono",
+      "colorPickerTitle": "Seleccionar color",
+      "imagePickerTitle": "Seleccionar imagen"
+    },
+    "sections": {
+      "controlType": "Tipo de control",
+      "visual": "Visual",
+      "pluginOptions": "Opciones del plugin"
+    },
+    "fields": {
+      "name": "Nombre",
+      "columns": "Columnas",
+      "rows": "Filas",
+      "backgroundColor": "Color fondo",
+      "plugin": "Plugin",
+      "control": "Control",
+      "columnSpan": "Ancho (casillas)",
+      "rowSpan": "Alto (casillas)",
+      "icon": "Icono",
+      "image": "Imagen",
+      "text": "Texto",
+      "color": "Color",
+      "background": "Fondo"
+    },
+    "buttons": {
+      "cancel": "Cancelar",
+      "save": "Guardar",
+      "saveControl": "Guardar control",
+      "delete": "Eliminar",
+      "basic": "Basico",
+      "advanced": "Avanzado"
+    },
+    "actions": {
+      "editPage": "Editar pagina",
+      "deletePage": "Eliminar pagina",
+      "addControl": "Anadir control",
+      "pasteControl": "Pegar control",
+      "copyControl": "Copiar control"
+    },
+    "confirm": {
+      "deletePage": "Eliminar la pagina \"{{name}}\"?",
+      "importConfig": "Importar una configuracion reemplazara las paginas y controles actuales. Quieres continuar?"
+    },
+    "alerts": {
+      "exportSuccess": "Configuracion exportada en:\n{{path}}",
+      "exportFailure": "No se pudo exportar la configuracion.\n\n{{message}}",
+      "importSuccess": "Configuracion importada desde:\n{{path}}",
+      "importFailure": "No se pudo importar la configuracion.\n\n{{message}}",
+      "keypressRequired": "Debes indicar una tecla principal.",
+      "keypressUnsupported": "La tecla \"{{key}}\" no esta soportada.",
+      "imageUnsupported": "Formato de imagen no soportado.",
+      "imageTooLarge": "La imagen supera el limite de {{limitKb}} KB.",
+      "imageReadFailure": "No se pudo leer la imagen seleccionada."
+    },
+    "iconPicker": {
+      "searchPlaceholder": "Buscar iconos...",
+      "empty": "No hay iconos para esa busqueda."
+    },
+    "imagePicker": {
+      "hint": "Haz clic en la imagen para seleccionar un archivo local.",
+      "empty": "No hay imagen seleccionada."
+    },
+    "colorPicker": {
+      "groupAria": "Modo de selector de color",
+      "advancedAria": "Selector avanzado de color"
+    },
+    "aria": {
+      "closeModal": "Cerrar modal",
+      "selectBackgroundColor": "Seleccionar color de fondo",
+      "selectColor": "Seleccionar color",
+      "selectIcon": "Seleccionar icono",
+      "selectImage": "Seleccionar imagen",
+      "removeImage": "Eliminar imagen"
+    },
+    "keypress": {
+      "title": "Captura de atajo",
+      "hint": "En modo avanzado, pulsa \"Grabar\" y luego presiona la combinacion en esta ventana.",
+      "none": "Sin atajo configurado",
+      "listening": "Escuchando teclas...",
+      "ready": "Listo para grabar",
+      "record": "Grabar atajo",
+      "clear": "Limpiar",
+      "manualBasic": "El modo basico usa la tecla escrita manualmente.",
+      "summary": {
+        "ctrl": "Ctrl",
+        "shift": "Shift",
+        "alt": "Alt",
+        "win": "Win",
+        "space": "Space"
+      }
+    }
+  },
+  "webclient": {
+    "documentTitle": "ControlsDeck Remote",
+    "connectionLost": "Conexion perdida. Reconectando...",
+    "installHintIos": "Para ver solo controles: Compartir > Anadir a pantalla de inicio.",
+    "installHintAndroid": "Para ver solo controles: menu del navegador > Instalar aplicacion.",
+    "installHintGeneric": "Instala esta app como PWA para ocultar la barra del navegador.",
+    "installHintDismiss": "Cerrar",
+    "installHintInsecure": "Esta URL local no permite instalacion PWA nativa en Android. Usa Pantalla completa o publica por HTTPS.",
+    "installPromptReady": "Instala ControlsDeck para abrirlo como app sin barra del navegador.",
+    "installActionInstall": "Instalar",
+    "installActionFullscreen": "Pantalla completa"
+  },
+  "plugins": {
+    "core": {
+      "meta": {
+        "name": "Core Control Library",
+        "description": "Controles base: cambio de pagina, reloj y mic toggle."
+      },
+      "controls": {
+        "pageSwitcher": {
+          "name": "Cambiar de pagina",
+          "description": "Cambia a otra pagina configurada.",
+          "defaultText": "Cambiar",
+          "targetPageLabel": "Pagina destino"
+        },
+        "clock": {
+          "name": "Reloj",
+          "description": "Muestra la hora actual.",
+          "formatLabel": "Formato",
+          "formats": {
+            "h24Short": "24h HH:mm",
+            "h24Long": "24h HH:mm:ss",
+            "h12": "12h hh:mm AM/PM"
+          }
+        },
+        "microphone": {
+          "name": "Microfono",
+          "description": "Alterna el estado del microfono.",
+          "on": "Micro ON",
+          "off": "Micro OFF"
+        },
+        "keypress": {
+          "name": "Keypress",
+          "description": "Simula una pulsacion de tecla con modificadores usando NirCmd.",
+          "modeLabel": "Modo",
+          "modeBasic": "Basico",
+          "modeAdvanced": "Avanzado",
+          "keyLabel": "Tecla",
+          "ctrlLabel": "Ctrl",
+          "shiftLabel": "Shift",
+          "altLabel": "Alt",
+          "windowsLabel": "Windows",
+          "defaultText": "Keypress"
+        }
+      }
+    }
+  }
+}

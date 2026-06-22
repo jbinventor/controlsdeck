@@ -1,0 +1,98 @@
+{
+  "id": "com.controlsdeck.corecontrollibrary",
+  "name": "@plugins.core.meta.name",
+  "version": "1.0.0",
+  "author": "ControlsDeck",
+  "description": "@plugins.core.meta.description",
+  "bundleFile": "bundle.js",
+  "controls": [
+    {
+      "typeId": "page-switcher",
+      "name": "@plugins.core.controls.pageSwitcher.name",
+      "description": "@plugins.core.controls.pageSwitcher.description",
+      "controlType": "button",
+      "configSchema": [
+        {
+          "key": "targetPageId",
+          "label": "@plugins.core.controls.pageSwitcher.targetPageLabel",
+          "type": "page",
+          "required": true
+        }
+      ]
+    },
+    {
+      "typeId": "clock",
+      "name": "@plugins.core.controls.clock.name",
+      "description": "@plugins.core.controls.clock.description",
+      "controlType": "button",
+      "configSchema": [
+        {
+          "key": "format",
+          "label": "@plugins.core.controls.clock.formatLabel",
+          "type": "select",
+          "defaultValue": "HH:mm:ss",
+          "options": [
+            { "value": "HH:mm", "label": "@plugins.core.controls.clock.formats.h24Short" },
+            { "value": "HH:mm:ss", "label": "@plugins.core.controls.clock.formats.h24Long" },
+            { "value": "hh:mm A", "label": "@plugins.core.controls.clock.formats.h12" }
+          ]
+        }
+      ]
+    },
+    {
+      "typeId": "microphone-toggle",
+      "name": "@plugins.core.controls.microphone.name",
+      "description": "@plugins.core.controls.microphone.description",
+      "controlType": "button",
+      "configSchema": []
+    },
+    {
+      "typeId": "keypress",
+      "name": "@plugins.core.controls.keypress.name",
+      "description": "@plugins.core.controls.keypress.description",
+      "controlType": "button",
+      "configSchema": [
+        {
+          "key": "mode",
+          "label": "@plugins.core.controls.keypress.modeLabel",
+          "type": "select",
+          "defaultValue": "basic",
+          "options": [
+            { "value": "basic", "label": "@plugins.core.controls.keypress.modeBasic" },
+            { "value": "advanced", "label": "@plugins.core.controls.keypress.modeAdvanced" }
+          ]
+        },
+        {
+          "key": "key",
+          "label": "@plugins.core.controls.keypress.keyLabel",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "ctrl",
+          "label": "@plugins.core.controls.keypress.ctrlLabel",
+          "type": "boolean",
+          "defaultValue": false
+        },
+        {
+          "key": "shift",
+          "label": "@plugins.core.controls.keypress.shiftLabel",
+          "type": "boolean",
+          "defaultValue": false
+        },
+        {
+          "key": "alt",
+          "label": "@plugins.core.controls.keypress.altLabel",
+          "type": "boolean",
+          "defaultValue": false
+        },
+        {
+          "key": "windows",
+          "label": "@plugins.core.controls.keypress.windowsLabel",
+          "type": "boolean",
+          "defaultValue": false
+        }
+      ]
+    }
+  ]
+}

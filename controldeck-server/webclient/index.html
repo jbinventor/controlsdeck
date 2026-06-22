@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f0f23">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title></title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="mobile-shell">
+    <section id="dashboard-view" class="panel">
+      <div id="connection-banner" class="banner hidden"></div>
+      <div id="install-hint" class="install-hint hidden" role="status" aria-live="polite">
+        <p id="install-hint-text" class="install-hint-text"></p>
+        <button id="install-hint-action" type="button" class="install-hint-action hidden"></button>
+        <button id="install-hint-close" type="button" class="install-hint-close" aria-label="Cerrar">x</button>
+      </div>
+      <section id="controls-grid" class="controls-grid"></section>
+    </section>
+  </div>
+
+  <script>
+// Protocol
+const MessageType = Object.freeze({
+  PAGE_LIST: 'PAGE_LIST',
+  PAGE_SWITCH: 'PAGE_SWITCH',
+  PAGE_DATA: 'PAGE_DATA',
+  CONTROL_ACTION: 'CONTROL_ACTION',
+  CONTROL_STATE_UPDATE: 'CONTROL_STATE_UPDATE',
+});
+
+function createMessage(type, payload = {}) {
+  return JSON.stringify({ type, payload });
+}
+
+function parseMessage(raw) {
+  const data = typeof raw === 'string' ? raw : raw.toString('utf8');
+  return JSON.parse(data);
+}
+
+// App
+const WS_PORT = 8765;
+const RECONNECT_MAX_MS = 30000;
+const SLIDER_THROTTLE_MS = 50;
+const DEFAULT_LOCALE = 'es';
+const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml']);
+
+const state = {
+  locale: DEFAULT_LOCALE,
+  i18n: {},
+  socket: null,
+  reconnectDelay: 1000,
+  reconnectTimer: null,
+  pages: [],
+  activePage: null,
+  controlsById: new Map(),
+  sliderValues: new Map(),
+  sliderSentAt: new Map(),
+  deferredInstallPrompt: null,
+  installHintDismissed: false,
+};
+
+const elements = {
+  connectionBanner: null,
+  installHint: null,
+  installHintText: null,
+  installHintAction: null,
+  installHintClose: null,
+  controlsGrid: null,
+};
+
+document.addEventListener('DOMContentLoaded', async () => {
+  cacheElements();
+  await loadI18n();
+  applyStaticTranslations();
+  setupDisplayModeExperience();
+  registerServiceWorker();
+  autoConnect();
+});
+
+function normalizeLocaleCode(rawLocale) {
+  const value = String(rawLocale || '').trim().toLowerCase();
+  if (!value) {
+    return DEFAULT_LOCALE;
+  }
+  return value.split(/[-_]/)[0] || DEFAULT_LOCALE;
+}
+
+function getByPath(source, keyPath) {
+  const parts = String(keyPath || '').split('.').filter(Boolean);
+  let cursor = source;
+  for (const part of parts) {
+    if (!cursor || typeof cursor !== 'object' || !(part in cursor)) {
+      return undefined;
+    }
+    cursor = cursor[part];
+  }
+  return cursor;
+}
+
+function t(keyPath, fallback = '') {
+  const value = getByPath(state.i18n, keyPath);
+  if (typeof value === 'string') {
+    return value;
+  }
+  return fallback || keyPath;
+}
+
+async function loadI18n() {
+  const preferred = normalizeLocaleCode(navigator.language || DEFAULT_LOCALE);
+  const candidates = [...new Set([preferred, DEFAULT_LOCALE])];
+
+  for (const localeCode of candidates) {
+    try {
+      const response = await fetch(`/locales/${localeCode}.json`);
+      if (!response.ok) {
+        continue;
+      }
+      const catalog = await response.json();
+      state.locale = localeCode;
+      state.i18n = catalog;
+      return;
+    } catch {
+      // Try next candidate locale.
+    }
+  }
+
+  state.locale = DEFAULT_LOCALE;
+  state.i18n = {};
+}
+
+function applyStaticTranslations() {
+  document.documentElement.lang = state.locale || DEFAULT_LOCALE;
+  document.title = t('webclient.documentTitle');
+  elements.connectionBanner.textContent = t('webclient.connectionLost');
+  elements.installHintClose.setAttribute('aria-label', t('webclient.installHintDismiss', 'Cerrar'));
+}
+
+function cacheElements() {
+  elements.connectionBanner = document.getElementById('connection-banner');
+  elements.installHint = document.getElementById('install-hint');
+  elements.installHintText = document.getElementById('install-hint-text');
+  elements.installHintAction = document.getElementById('install-hint-action');
+  elements.installHintClose = document.getElementById('install-hint-close');
+  elements.controlsGrid = document.getElementById('controls-grid');
+}
+
+function setupDisplayModeExperience() {
+  updateDisplayModeClass();
+  updateInstallHint();
+
+  elements.installHintClose.addEventListener('click', () => {
+    state.installHintDismissed = true;
+    updateInstallHint();
+  });
+
+  elements.installHintAction.addEventListener('click', async () => {
+    if (state.deferredInstallPrompt) {
+      try {
+        state.deferredInstallPrompt.prompt();
+        await state.deferredInstallPrompt.userChoice;
+      } catch {
+        // Ignore prompt rejections.
+      }
+      state.deferredInstallPrompt = null;
+      updateInstallHint();
+      return;
+    }
+
+    toggleFullscreenMode();
+  });
+
+  window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault();
+    state.deferredInstallPrompt = event;
+    updateInstallHint();
+  });
+
+  const displayModeMedia = window.matchMedia('(display-mode: standalone)');
+  if (typeof displayModeMedia.addEventListener === 'function') {
+    displayModeMedia.addEventListener('change', onDisplayModeChanged);
+  } else if (typeof displayModeMedia.addListener === 'function') {
+    displayModeMedia.addListener(onDisplayModeChanged);
+  }
+
+  window.addEventListener('appinstalled', () => {
+    updateDisplayModeClass();
+    hideInstallHint();
+  });
+}
+
+function onDisplayModeChanged() {
+  updateDisplayModeClass();
+  updateInstallHint();
+}
+
+function isStandaloneDisplayMode() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function isInstallableContext() {
+  if (window.isSecureContext) {
+    return true;
+  }
+  const host = window.location.hostname;
+  return host === 'localhost' || host === '127.0.0.1';
+}
+
+function canUseFullscreenApi() {
+  return typeof document.documentElement.requestFullscreen === 'function' && typeof document.exitFullscreen === 'function';
+}
+
+function toggleFullscreenMode() {
+  if (!canUseFullscreenApi()) {
+    return;
+  }
+
+  if (document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+    return;
+  }
+
+  document.documentElement.requestFullscreen().catch(() => {});
+}
+
+function updateDisplayModeClass() {
+  const standalone = isStandaloneDisplayMode();
+  document.body.classList.toggle('standalone-mode', standalone);
+  document.body.classList.toggle('browser-mode', !standalone);
+}
+
+function detectPlatform() {
+  const ua = (navigator.userAgent || '').toLowerCase();
+  const isIos = /iphone|ipad|ipod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (isIos) {
+    return 'ios';
+  }
+  if (/android/.test(ua)) {
+    return 'android';
+  }
+  return 'other';
+}
+
+function getInstallHintText() {
+  const platform = detectPlatform();
+  if (platform === 'ios') {
+    return t('webclient.installHintIos', 'Para ver solo controles: Compartir > Anadir a pantalla de inicio.');
+  }
+  if (platform === 'android') {
+    return t('webclient.installHintAndroid', 'Para ver solo controles: menu del navegador > Instalar aplicacion.');
+  }
+  return t('webclient.installHintGeneric', 'Instala esta app como PWA para ocultar la barra del navegador.');
+}
+
+function updateInstallHint() {
+  if (isStandaloneDisplayMode() || state.installHintDismissed) {
+    hideInstallHint();
+    return;
+  }
+
+  const installableContext = isInstallableContext();
+  const hasDeferredPrompt = Boolean(state.deferredInstallPrompt);
+
+  if (hasDeferredPrompt) {
+    elements.installHintText.textContent = t('webclient.installPromptReady', 'Instala ControlsDeck para abrirlo como app sin barra del navegador.');
+    elements.installHintAction.textContent = t('webclient.installActionInstall', 'Instalar');
+    elements.installHintAction.classList.remove('hidden');
+  } else if (!installableContext) {
+    elements.installHintText.textContent = t('webclient.installHintInsecure', 'Esta URL local no permite instalacion PWA nativa en Android. Usa Pantalla completa o publica por HTTPS.');
+    if (canUseFullscreenApi()) {
+      elements.installHintAction.textContent = t('webclient.installActionFullscreen', 'Pantalla completa');
+      elements.installHintAction.classList.remove('hidden');
+    } else {
+      elements.installHintAction.classList.add('hidden');
+    }
+  } else {
+    elements.installHintText.textContent = getInstallHintText();
+    elements.installHintAction.classList.add('hidden');
+  }
+
+  elements.installHint.classList.remove('hidden');
+}
+
+function hideInstallHint() {
+  elements.installHint.classList.add('hidden');
+}
+
+function autoConnect() {
+  const ip = window.location.hostname;
+  console.log('[app] Auto-conectando a', ip, ':', WS_PORT);
+  openSocket(ip).catch((err) => {
+    console.error('[app] Error conectando:', err);
+    scheduleReconnect(ip);
+  });
+}
+
+function openSocket(ip) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const wsUrl = `ws://${ip}:${WS_PORT}`;
+    console.log('[ws] Intentando conectar a', wsUrl);
+    const socket = new WebSocket(wsUrl);
+    state.socket = socket;
+
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      socket.close();
+      console.error('[ws] Timeout conectando');
+      reject(new Error('timeout'));
+    }, 5000);
+
+    socket.addEventListener('open', () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      state.reconnectDelay = 1000;
+      hideBanner();
+      console.log('[ws] Conectado a', ip);
+      resolve();
+    });
+
+    socket.addEventListener('message', (event) => {
+      const message = parseMessage(event.data);
+      console.log('[ws] Mensaje recibido:', message.type);
+      handleMessage(message);
+    });
+
+    socket.addEventListener('close', () => {
+      if (!settled) {
+        settled = true;
+        window.clearTimeout(timer);
+        console.log('[ws] Conexión cerrada');
+        reject(new Error('closed'));
+        return;
+      }
+      scheduleReconnect();
+    });
+
+    socket.addEventListener('error', (err) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      console.error('[ws] Error socket:', err);
+      reject(new Error('socket-error'));
+    });
+  });
+}
+
+function scheduleReconnect(ip) {
+  clearTimeout(state.reconnectTimer);
+  showBanner();
+  state.reconnectTimer = window.setTimeout(async () => {
+    const host = ip || window.location.hostname;
+    console.log('[ws] Reintentando conexión a', host);
+    try {
+      await openSocket(host);
+      hideBanner();
+      if (state.activePage?.id) {
+        sendPageSwitch(state.activePage.id);
+      }
+    } catch (error) {
+      state.reconnectDelay = Math.min(RECONNECT_MAX_MS, state.reconnectDelay * 2);
+      scheduleReconnect(host);
+    }
+  }, state.reconnectDelay);
+}
+
+function handleMessage(message) {
+  switch (message.type) {
+    case MessageType.PAGE_LIST:
+      state.pages = message.payload.pages || [];
+      console.log('[app] Páginas recibidas:', state.pages.length);
+      break;
+    case MessageType.PAGE_DATA:
+      state.activePage = message.payload.page;
+      console.log('[app] Datos de página recibidos:', state.activePage?.name, 'Controles:', state.activePage?.controls?.length);
+      indexControls(state.activePage?.controls || []);
+      renderDashboard();
+      break;
+    case MessageType.CONTROL_STATE_UPDATE:
+      applyControlUpdates(message.payload.updates || []);
+      renderControls();
+      break;
+    default:
+      break;
+  }
+}
+
+function indexControls(controls) {
+  state.controlsById = new Map();
+  for (const control of controls) {
+    state.controlsById.set(control.id, control);
+  }
+}
+
+function applyControlUpdates(updates) {
+  for (const update of updates) {
+    const control = state.controlsById.get(update.controlId);
+    if (control) {
+      control.state = update;
+    }
+  }
+}
+
+function renderDashboard() {
+  renderControls();
+}
+
+function renderControls() {
+  elements.controlsGrid.replaceChildren();
+  const page = state.activePage;
+  if (!page) {
+    return;
+  }
+
+  elements.controlsGrid.style.background = page.backgroundColor;
+  elements.controlsGrid.style.gridTemplateColumns = `repeat(${page.columns}, minmax(0, 1fr))`;
+  elements.controlsGrid.style.gridTemplateRows = `repeat(${page.rows}, minmax(96px, 1fr))`;
+
+  for (const control of page.controls) {
+    const card = document.createElement('div');
+    card.className = 'control-card';
+    card.style.gridColumn = `${control.column + 1} / span ${control.columnSpan || 1}`;
+    card.style.gridRow = `${control.row + 1} / span ${control.rowSpan || 1}`;
+    applyControlCardBackground(card, control.config || {}, control.state || {});
+    card.style.color = control.state?.color || control.config?.color || '#ffffff';
+
+    if (control.controlType === 'slider-h' || control.controlType === 'slider-v') {
+      renderSlider(card, control, control.controlType === 'slider-v');
+    } else {
+      renderButton(card, control);
+    }
+
+    elements.controlsGrid.append(card);
+  }
+}
+
+function parseImageDataUrl(rawValue) {
+  const text = String(rawValue || '').trim();
+  if (!text) {
+    return null;
+  }
+  const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,([a-zA-Z0-9+/=]+)$/.exec(text);
+  if (!match) {
+    return null;
+  }
+  return {
+    mimeType: match[1].toLowerCase(),
+    dataUrl: text,
+  };
+}
+
+function normalizeImageDataUrl(rawValue) {
+  const parsed = parseImageDataUrl(rawValue);
+  if (!parsed || !ALLOWED_IMAGE_MIME_TYPES.has(parsed.mimeType)) {
+    return '';
+  }
+  return parsed.dataUrl;
+}
+
+function applyControlCardBackground(card, config, controlState) {
+  const fallbackColor = controlState?.backgroundColor || config?.backgroundColor || '#2d2d2d';
+  const imageDataUrl = normalizeImageDataUrl(config?.imageDataUrl || '');
+  card.style.backgroundColor = fallbackColor;
+
+  if (imageDataUrl) {
+    card.style.backgroundImage = `url(${JSON.stringify(imageDataUrl)})`;
+    card.style.backgroundSize = 'contain';
+    card.style.backgroundPosition = 'center';
+    card.style.backgroundRepeat = 'no-repeat';
+  } else {
+    card.style.backgroundImage = 'none';
+    card.style.backgroundSize = '';
+    card.style.backgroundPosition = '';
+    card.style.backgroundRepeat = '';
+  }
+}
+
+function renderButton(card, control) {
+  const inner = document.createElement('div');
+  inner.className = 'control-inner';
+  const icon = document.createElement('i');
+  icon.className = `fa-solid ${control.state?.icon || control.config.icon || 'fa-square'}`;
+  const text = document.createElement('div');
+  text.textContent = control.state?.text || control.config.text || '';
+  inner.append(icon, text);
+  card.append(inner);
+
+  const activate = () => sendControlAction(control.id, null);
+  attachPressEffect(card, activate);
+}
+
+function renderSlider(card, control, vertical) {
+  const inner = document.createElement('div');
+  inner.className = 'control-inner';
+  inner.style.width = '100%';
+  inner.style.height = '100%';
+
+  const text = document.createElement('div');
+  text.textContent = control.state?.text || control.config.text || '';
+
+  const track = document.createElement('div');
+  track.className = `slider-track${vertical ? ' vertical' : ''}`;
+  const fill = document.createElement('div');
+  fill.className = `slider-fill${vertical ? ' vertical' : ''}`;
+  const ratio = state.sliderValues.get(control.id) ?? 0.5;
+  if (vertical) {
+    fill.style.height = `${ratio * 100}%`;
+  } else {
+    fill.style.width = `${ratio * 100}%`;
+  }
+  track.append(fill);
+  inner.append(text, track);
+  card.append(inner);
+
+  const onMove = (event) => {
+    const rect = track.getBoundingClientRect();
+    let ratioValue;
+    if (vertical) {
+      ratioValue = 1 - ((event.clientY - rect.top) / rect.height);
+    } else {
+      ratioValue = (event.clientX - rect.left) / rect.width;
+    }
+    const normalized = Math.max(0, Math.min(1, ratioValue));
+    state.sliderValues.set(control.id, normalized);
+    if (vertical) {
+      fill.style.height = `${normalized * 100}%`;
+    } else {
+      fill.style.width = `${normalized * 100}%`;
+    }
+    sendSliderValue(control.id, normalized);
+  };
+
+  track.addEventListener('pointerdown', (event) => {
+    track.setPointerCapture(event.pointerId);
+    onMove(event);
+  });
+  track.addEventListener('pointermove', (event) => {
+    if (event.buttons === 0) return;
+    onMove(event);
+  });
+  track.addEventListener('pointerup', (event) => {
+    onMove(event);
+    sendControlAction(control.id, state.sliderValues.get(control.id) ?? 0);
+  });
+}
+
+function sendSliderValue(controlId, value) {
+  const now = Date.now();
+  const lastSentAt = state.sliderSentAt.get(controlId) || 0;
+  if (now - lastSentAt < SLIDER_THROTTLE_MS) return;
+  state.sliderSentAt.set(controlId, now);
+  sendControlAction(controlId, value);
+}
+
+function attachPressEffect(card, handler) {
+  const press = () => card.classList.add('pressed');
+  const release = () => card.classList.remove('pressed');
+
+  card.addEventListener('pointerdown', press);
+  card.addEventListener('pointerup', () => {
+    release();
+    handler();
+  });
+  card.addEventListener('pointerleave', release);
+  card.addEventListener('pointercancel', release);
+}
+
+function sendControlAction(controlId, value) {
+  if (!state.socket || state.socket.readyState !== WebSocket.OPEN) return;
+  state.socket.send(createMessage(MessageType.CONTROL_ACTION, { controlId, value }));
+}
+
+function sendPageSwitch(pageId) {
+  if (!state.socket || state.socket.readyState !== WebSocket.OPEN) return;
+  state.socket.send(createMessage(MessageType.PAGE_SWITCH, { pageId }));
+}
+
+function showBanner() {
+  elements.connectionBanner.classList.remove('hidden');
+}
+
+function hideBanner() {
+  elements.connectionBanner.classList.add('hidden');
+}
+
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+  </script>
+</body>
+</html>
